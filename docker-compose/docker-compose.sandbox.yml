@@ -1,0 +1,95 @@
+# Production-style compose file for a VM or EC2 instance.
+# This keeps the same PostgreSQL schema layout as local development:
+# - core (Identity API)
+# - hospital, registration, doctor (HMS API)
+#
+# Usage:
+#   cp devops/.env.production.example .env
+#   APP_VERSION=v1.2.3 GHCR_OWNER=your-org docker compose -f devops/docker-compose.prod.yml --env-file .env up -d
+#
+# Each service can also be pinned separately with its own tag override:
+#   IDENTITY_IMAGE_TAG=v1.2.3 HMS_IMAGE_TAG=v1.2.4 MIGRATOR_IMAGE_TAG=v1.2.5 WEB_IMAGE_TAG=v1.2.6
+#   APP_VERSION is kept as the common default fallback when a specific tag is not provided.
+
+name: ayush360
+
+x-db-connection: &db-connection "Host=db;Port=5432;Database=${POSTGRES_DB:-ayush360};Username=${POSTGRES_USER:-ayush360_app};Password=${DB_PASSWORD:?DB_PASSWORD is required}"
+
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: ayush360-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ayush360}
+      POSTGRES_USER: ${POSTGRES_USER:-ayush360_app}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    volumes:
+      - db-data:/var/lib/postgresqlS
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ayush360_app} -d ${POSTGRES_DB:-ayush360}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    image: ghcr.io/${GHCR_OWNER:-your-org}/ayush360-migrator:${MIGRATOR_IMAGE_TAG:-${APP_VERSION:-latest}}
+    pull_policy: always
+    container_name: ayush360-migrator
+    restart: "no"
+    environment:
+      ConnectionStrings__Default: *db-connection
+    depends_on:
+      db:
+        condition: service_healthy
+
+  identity:
+    image: ghcr.io/${GHCR_OWNER:-your-org}/ayush360-identity:${IDENTITY_IMAGE_TAG:-${APP_VERSION:-latest}}
+    pull_policy: always
+    container_name: ayush360-identity
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: *db-connection
+      DemoData__Enabled: ${DEMO_DATA_ENABLED:-false}
+      DemoData__Password: ${DEMO_DATA_PASSWORD:-demo123}
+      Jwt__RequireHttpsMetadata: "true"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  hms:
+    image: ghcr.io/${GHCR_OWNER:-your-org}/ayush360-hms:${HMS_IMAGE_TAG:-${APP_VERSION:-latest}}
+    pull_policy: always
+    container_name: ayush360-hms
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: *db-connection
+      DemoData__Enabled: ${DEMO_DATA_ENABLED:-false}
+      Jwt__JwksUrl: http://identity:8080/.well-known/jwks.json
+      Jwt__RequireHttpsMetadata: "false"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      identity:
+        condition: service_started
+
+  web:
+    image: ghcr.io/${GHCR_OWNER:-your-org}/ayush360-web:${WEB_IMAGE_TAG:-${APP_VERSION:-latest}}
+    pull_policy: always
+    container_name: ayush360-web
+    restart: unless-stopped
+    environment:
+      IDENTITY_API_URL: http://identity:8080
+      HMS_API_URL: http://hms:8080
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      - identity
+      - hms
+
+volumes:
+  db-data:
