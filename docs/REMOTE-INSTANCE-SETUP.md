@@ -21,7 +21,7 @@ sudo su
 From the VM:
 
 ```bash
-git clone https://<github-user>:<github-token>@github.com/<github-user>/ayush360-devOps.git
+git clone https://github.com/dhevendranoothalapati/Ayush360-DevOps.git
 ```
 
 > This repo contains the deploy tooling, Compose file, env templates, and bootstrap script only.
@@ -116,9 +116,6 @@ Start it with:
 
 ```bash
 cd /home/azureuser/ayush360-devOps
-set -a
-source .env
-set +a
 docker compose -f docker-compose/docker-compose.sandbox.yml up -d
 ```
 

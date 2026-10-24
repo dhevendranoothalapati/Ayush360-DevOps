@@ -69,6 +69,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Default: *db-connection
       DemoData__Enabled: ${DEMO_DATA_ENABLED:-false}
+      Aadhaar__EncryptionKey: ${AADHAAR_ENCRYPTION_KEY}
+      Aadhaar__HashKey: ${AADHAAR_HASH_KEY}
       Jwt__JwksUrl: http://identity:8080/.well-known/jwks.json
       Jwt__RequireHttpsMetadata: "false"
     depends_on:

@@ -116,7 +116,8 @@ main() {
   echo "Bootstrap complete."
   echo "You can now run the production compose stack with:"
   echo "  export GHCR_OWNER=${GHCR_OWNER}"
-  echo "  APP_VERSION=v1.2.3 docker compose -f devops/docker-compose.prod.yml --env-file .env up -d"
+  echo "  Run the following command to start the services:"
+  echo "  docker compose -f devops/docker-compose.prod.yml up -d"
 }
 
 main "$@"
